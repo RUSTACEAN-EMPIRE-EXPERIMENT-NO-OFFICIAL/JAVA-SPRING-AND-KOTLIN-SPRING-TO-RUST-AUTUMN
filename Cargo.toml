@@ -1,0 +1,26 @@
+[package]
+name = "java-spring-to-rust-autumn"
+version = "0.1.0"
+edition = "2021"
+authors = ["jinhee han"]
+license = "MIT"
+description = "Refactoring Java Spring / Kotlin Spring into Rust Autumn style"
+repository = "https://github.com/Freeing-the-Lang/JAVA-SPRING-AND-KOTLIN-SPRING-TO-RUST-AUTUMN"
+
+[dependencies]
+# Rust web/HTTP framework (Spring Controller 대응)
+axum = "0.7"
+
+# Tokio runtime (Axum 필수)
+tokio = { version = "1.35", features = ["full"] }
+
+# For JSON response
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Optional but useful for refactoring/mapping
+regex = "1.10"
+
+# Logging (Spring Boot의 Logger 느낌)
+tracing = "0.1"
+tracing-subscriber = "0.3"
