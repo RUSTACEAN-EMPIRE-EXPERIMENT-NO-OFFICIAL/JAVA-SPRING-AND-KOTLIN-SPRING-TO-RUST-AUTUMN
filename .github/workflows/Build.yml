@@ -1,0 +1,100 @@
+name: Rust-Autumn-Release
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write  # 태그 생성 + 릴리스 생성 위해 필요
+
+jobs:
+  build-release:
+    name: 3OS-Release-Build
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Make proofledger dir
+        run: mkdir -p proofledger
+
+      - name: Generate SHA256 (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          echo "=== SHA256 Summary ===" > proofledger/sha256.txt
+          find target/release -maxdepth 1 -type f -print0 | xargs -0 sha256sum >> proofledger/sha256.txt
+
+      - name: Generate SHA256 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "=== SHA256 Summary ===" | Out-File -FilePath proofledger/sha256.txt -Encoding utf8
+          Get-ChildItem "target/release" -File | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            "$hash  $($_.Name)" | Out-File -FilePath proofledger/sha256.txt -Encoding utf8 -Append
+          }
+
+      - name: Zip artifact (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          zip -r autumn-${{ runner.os }}.zip target/release/* proofledger/*
+
+      - name: Zip artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/release/*","proofledger/*" -DestinationPath "autumn-windows.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autumn-${{ runner.os }}
+          path: |
+            *.zip
+            proofledger/sha256.txt
+
+  release:
+    name: Create Release
+    needs: build-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Tag
+        id: tagger
+        run: |
+          TAG="v1.0.$(date +'%Y%m%d%H%M')"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag $TAG
+          git push origin $TAG
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tagger.outputs.tag }}
+          name: "Autumn Release ${{ steps.tagger.outputs.tag }}"
+          draft: false
+          prerelease: false
+          files: |
+            release_artifacts/**/*
